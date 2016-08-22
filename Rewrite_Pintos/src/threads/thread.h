@@ -19,7 +19,6 @@
 /* MY COMMENTS: 
    different header files to be included later on: we will examine these separately. */
 
-
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -92,7 +91,7 @@ typedef int tid_t;
 	large. If a stack overflows, it will corrupt the thread state.
 	Thus, kernel functions should not allocate large structures
 	or arrays as non-static local variables (so static variables
-        are stored on the stack??). Use dynamic allocation with 
+        are *not* stored on the stack). Use dynamic allocation with 
 	malloc() or palloc_get_page() instead. 
 
 
@@ -103,11 +102,52 @@ typedef int tid_t;
     value, triggering the assertion. */
 
 /*  The 'elem' member has a dual purpose. It can be an element in the run
-    queue 
-
-    
-
+    queue (thread.c), or it can be an element in a semaphore wait list 
+    (synch.c). It can be used these two ways only because they are mutually
+    exclusive: only a thread in the ready state is on the run queue, whereas
+    only a thread in the blocked state is on a semaphore wait list.
 */
+
+struct thread
+{
+
+  /* Owned by thread.c */
+  tid_t tid;                          /* Thread identifier. */
+  enum thread_status status;          /* Thread state. */
+  char name[16];                      /* Name (for debugging purposes). */
+  uint8_t *stack;                     /* unsigned integer with exactly 8 bits. pointer to 
+				         the stack. */
+  int priority;                       /* Priority of the thread as previously described:
+       				         6 bit range. */
+
+  /* Shared between thread.c and synch.c */
+  struct list_elem allelem;           /* List element. */
+
+
+  /* MY COMMENTS: realize here macro conditionals can be located in the middle of code*/
+#ifdef USERPROG
+  /* Owned by userprog/process.c */
+  uint32_t *pagedir;                  /* Page directory. */
+#endif
+
+  /* Owned by thread.c */
+  unsigned magic;                     /* detects stack overflow. */
+
+  };
+
 #endif /* threads/thread.h */
 
 
+/* If false (default), use round-robin scheduler. 
+   If true, use multi-level feedback queue scheduler.
+   Conrolled by kernel command-line option "-o mlfqs". */
+extern bool thread_mlfqs; 
+
+void thread_init (void);
+void thread_start (void);
+
+void thread_tick (void);
+void thread_print_stats (void);
+
+typedef voidthread_func (void *aux);
+tid_t thread_create (const char *name, int priority, thread_func *, void *);
