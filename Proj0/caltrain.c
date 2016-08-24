@@ -6,7 +6,8 @@ struct station{
   bool is_train;
   unsigned int num_open;
   unsigned int pass_waiting;
-  lock count_lock; 
+  lock* count_lock; 
+  lock* 
 
   /* ok...so now it's apparent to me that a condition variable 
      could be necessary for waiting for a train with 
@@ -27,7 +28,7 @@ void station_init(struct station* station)
    the function must not return until the train is satisfactorily loaded--
    i.e. all passengers are in their seats, and either the train is full or 
    all waiting passengers have boarded. */
-void station_load_train(struct station *station, int count)
+void station_load_train(struct station* station, int count)
 {
   if (count <= 0)
     return;
@@ -35,10 +36,13 @@ void station_load_train(struct station *station, int count)
   station->is_train = true;
   station->num_open = count;
   
-  /* broadcast to all waiting threads empty space is available */
-  cond_broadcast (station->pass_waiting, station->count_lock);  
-
-  /* Need a way to signal to the function that it is completely boarded*/
+  /* Need a way to signal to the function that it is completely boarded */
+  while (station->num_open && station->pass_waiting)
+    {
+      lock_acquire(station->count_lock);
+      /* singal to next-in-line thread that empty space is available */
+      cond_signal(station->pass_waiting, station->count_lock);  
+    }
 
   return;
 }
@@ -47,13 +51,21 @@ void station_load_train(struct station *station, int count)
 void station_wait_for_train(struct station *station)
 {
   cond_wait(station->pass_waiting, station->count_lock);
+  
+  /* Since the lock has been acquired...let the passenger board */
+  station->num_open--; 
+
+  /* then release the lock on the count */
+  lock_release(station->count_lock);
 }
 
 // TODO: Once the passenger is seated, it calls the following
 // function to let it know that it's on board
 void station_on_board(struct station *station)
 {
-  
+
+  /* Probably should lock this as well... need to think about it */
+  station->pass_waiting--;
 
 
 }
