@@ -1,0 +1,145 @@
+#include "pintos_thread.h"
+
+/* NO BUSY WAITING ANYWHERE */
+
+
+/* 
+   must include the number of open seats for the train, 
+   the number of waiting passengers, and the number of
+   boarding passengers 
+
+   !!!!!!!!there can only be one lock in this struct!!!!!!!!!
+*/
+struct station 
+{
+  /* So here we have e*/
+
+  unsigned int num_open;
+
+  unsigned int num_waiting;
+  struct condition wait_queue;
+
+  unsigned int num_boarding;
+  struct condition train_wait;   //this condition really just consists of the train
+
+  struct lock boarding_lock;   // the lock used for everything
+
+  
+};
+
+/* Don't know why this wasn't included... */
+void station_on_board(struct station*);
+
+
+void
+station_init(struct station *station)
+{
+  station->num_open = 0;
+  station->num_waiting = 0;
+  station->num_boarding = 0;
+  
+  cond_init(&station->wait_queue);
+  cond_init(&station->train_wait);
+
+  lock_init(&station->boarding_lock);
+}
+
+/*
+ 
+1. The function must not return until the train is satisfactorily loaded 
+   (all passengers are in their seats, and either the train is full or *all*
+   waiting passengers have boarded). 
+
+2. May assume there is never more than one train in the station at once.
+
+3. May assume any passenger may board any train.
+
+*/
+void station_load_train(struct station *station, int count)
+{
+  // there should be a loop in here first checking if 
+  // there are any open seats, and secondly if there are
+  // any passengers waiting. 
+
+  /* Perhaps we can lock both passengers and seats at once */
+  lock_acquire(&station->boarding_lock);
+  station->num_open = count;
+  while (station->num_open > 0)
+    {
+      if (station->num_waiting > 0)
+	{
+	  /* The key is to update here, since all conditions 
+             to continue are checked in *this* function, and the 
+             passenger threads may not have updated these variables
+             before the condition is checked. If we've reached this 
+             pint we know all these variables need to be updated anyways. */
+	  station->num_open--;
+	  station->num_boarding++;
+	  station->num_waiting--;
+	  
+	  /* Finally signal to the passenger thread to wake. */
+	  cond_signal(&station->wait_queue, &station->boarding_lock);
+	}
+
+      else
+	{
+	  station->num_open = 0;
+	  break;
+	}
+    }
+
+  
+  /* If we're here the train still has the boarding lock...
+     which we can probably re-use. Remember: one lock may be associated
+     with many condition variables. 
+
+     Now I see how this makes sense...for example, in this case we have a 
+     sequential use of the lock such that it operates on different 
+     conditions. */
+
+  while (station->num_boarding > 0)
+    {
+      cond_wait(&station->train_wait, &station->boarding_lock);
+    }
+  
+  /* If we're here all passengers are in their seats. */
+  lock_release(&station->boarding_lock);
+
+  return;
+}
+
+
+/* This code must allow multiple passengers to board simultaneously (it must
+   be posible for several passengers to have called station_wait_for_train,
+   and for that function to have returned for *each* of the p*/
+void station_wait_for_train(struct station *station)
+{
+  lock_acquire(&station->boarding_lock);
+  while (station->num_open == 0)
+    {
+      station->num_waiting++;
+      cond_wait(&station->wait_queue, &station->boarding_lock);
+    }
+
+  /* Because of the comment at the function header, we must release this lock before 
+     boarding. */
+  lock_release(&station->boarding_lock);
+
+  station_on_board(station);
+
+  return;
+}
+
+void
+station_on_board(struct station *station)
+{
+  lock_acquire(&station->boarding_lock);
+  station->num_boarding--;
+  if (station->num_boarding == 0)
+    {
+      // if the train isn't ready yet this should do nothing 
+      cond_signal(&station->train_wait, &station->boarding_lock);
+    }
+
+  lock_release(&station->boarding_lock);
+}
