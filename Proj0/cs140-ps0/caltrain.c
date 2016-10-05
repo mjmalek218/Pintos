@@ -144,7 +144,7 @@ void
 station_on_board(struct station *station)
 {
   lock_acquire(&station->boarding_lock);
-  station->num_boarding--; // this is being incremented below zero
+  station->num_boarding--; 
   
   /* Basically this should only signal the train to wake up once
      the numver of boarding passengers is 0 */
