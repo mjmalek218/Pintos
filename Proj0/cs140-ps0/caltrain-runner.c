@@ -114,8 +114,8 @@ main()
 	const int max_free_seats_per_train = 50;
 	int pass = 0;
 	while (passengers_left > 0) {
-	  //	  _alarm(2, "Some more complicated issue appears to have caused passengers "
-	  //		"not to board when given the opportunity"\);
+	    _alarm(2, "Some more complicated issue appears to have caused passengers "
+	  		"not to board when given the opportunity");
 
 		int free_seats = random() % max_free_seats_per_train;
 

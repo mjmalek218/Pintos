@@ -79,7 +79,7 @@ main(int argc, char** argv)
 	alarm(10);
 
 	int i;
-	const int total_atoms = 200;
+	const int total_atoms = 20;
 	int hydrogen_atoms = 0;
 	int oxygen_atoms = 0;
 	int hydrogen_pct = atoi(argv[1]);
