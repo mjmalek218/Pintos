@@ -100,6 +100,18 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    /* BEGIN FIELDS I HAVE ADDED */
+    
+    /* general purpose synchronization tool*/
+    static struct condition cond; 
+    
+    /* The number of ticks left for the thread to sleep, when it
+       puts itself to sleep with a timer_sleep call. reset
+       at every timer_sleep call. */
+    int64_t sleep_ticks;
+
+    /* END FIELDS I HAVE ADDED */
   };
 
 /* If false (default), use round-robin scheduler.

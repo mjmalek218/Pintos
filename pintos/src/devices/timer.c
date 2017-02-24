@@ -84,16 +84,61 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
-/* Sleeps for approximately TICKS timer ticks.  Interrupts must
-   be turned on. */
+/* Suspends execution of the calling thread until time has advanced by 
+   at least x (the argument) timer ticks. Unless the system is otherwise idle, the thread
+   need not wake up after exactly x ticks. Just put it on the ready queue
+   after they have waited for the right amount of time. 
+*/
 void
 timer_sleep (int64_t ticks) 
 {
+  /* 
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
   while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+     thread_yield ();  */
+
+
+  /******** BEGIN CHANGES *********/
+
+  ASSERT (intr_get_level() == INTR_ON);
+  int64_t start = timer_ticks();
+  enum intr_level old_level;
+
+  /* need to disable interrupts at the beginning
+     here because we are modifying global variables which
+     are also modified in external interrupt handlers */
+  old_level = intr_disable();
+
+  /* we use a while loop here to re-check in case the scheduler wakes
+     up this thread pre-maturely. */
+  while (timer_elapsed (start) < ticks)
+    { 
+      intr_disable();
+
+      list_push_back(&timer_sleep_list, &thread_current()->elem);
+      
+      /* reset the amount it needs to sleep by */      
+      thread_current()->sleep_ticks = ticks - timer_elapsed (start);
+    
+      /* We don't want to run the thread once time has elapsed...
+         we just want to put it on the ready queue. Therefore,
+         synchronization primitives are unhelpful. Just put the current
+         thread to sleep. NOTE: interrupts must be disabled if we 
+         take this route there is no other way. */
+      thread_block();
+    }
+
+  /* I think the coordination here makes sense tbh. If interrupts are disabled
+     in this function, then they should be re-enabled in this function.
+     However, for obvious reasons the thread must be unblocked in the interrupt timer
+     handler. 
+ */
+  intr_set_level (old_level);
+
+  /******** END CHANGES *********/
+
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -200,7 +245,7 @@ too_many_loops (unsigned loops)
    affect timings, so that if this function was inlined
    differently in different places the results would be difficult
    to predict. */
-static void NO_INLINE
+static void NO_INLINE   
 busy_wait (int64_t loops) 
 {
   while (loops-- > 0)

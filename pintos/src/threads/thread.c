@@ -28,6 +28,12 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+// CHANGED CHANGED
+/* SOMETHING THAT I HAVE CHANGED*/
+static struct list timer_sleep_list;
+// CHANGED CHANGED
+
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -36,6 +42,12 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+
+/* SOMETHING ELSE I HAVE CHANGED */
+/* A general purpose lock for use in scheduling, in conjunction with each thread's
+   condition variable. */
+static struct lock schedule_lock; 
+// CHANGED CHANGED
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -90,8 +102,10 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  lock_init (&schedule_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&timer_sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -123,7 +137,7 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
-
+   
   /* Update statistics. */
   if (t == idle_thread)
     idle_ticks++;
@@ -137,10 +151,43 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+
+  /***************** BEGIN CHANGES */
+
+  
+  /* update the timer sleep list. if a thread reaches zero put it on
+     the ready list. */
+
+  struct thread* sleeping_thread;  
+  struct list_elem* e;
+
+  /* if we used locks to control access here, there would be timer ticks that would 
+     occur that would potentially go un-noticed and be skipped over while waiting
+     for the lock: very bad. again no point in using locks in external interrupts
+     since all synchronization is controlled by disabling interrupts. */
+  for (e = list_begin(&timer_sleep_list); e!= list_end(&timer_sleep_list); e = list_next(e))
+    {
+      /* decrement each sleep_tick. remember list_entry returns a pointer */
+      sleeping_thread = list_entry(e, thread, elem);
+
+      /* a few sanity checks. for the sake of speed these should be later removed probably.*/
+      ASSERT (sleeping_thread != NULL);
+      ASSERT (sleeping_threads->sleep_ticks > 0);
+
+      sleeping_thread->sleep_ticks--;
+
+      if (sleeping_thread->sleep_ticks == 0)
+	{
+	  list_remove(e);
+	  thread_unblock (sleeping_thread);
+	}
+    }
+
+  /******************* END CHANGES */
 }
 
 /* Prints thread statistics. */
-void
+void  
 thread_print_stats (void) 
 {
   printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
