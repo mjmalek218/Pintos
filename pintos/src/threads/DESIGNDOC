@@ -1,4 +1,4 @@
-			+--------------------+
+ 			+--------------------+
 			|        CS 140      |
 			| PROJECT 1: THREADS |
 			|   DESIGN DOCUMENT  |
@@ -29,6 +29,25 @@ Michael Malek <mjmalek218@protonmail.com>
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
 
+NEW STRUCT: "static struct list timer_sleep_list;"
+
+PURPOSE: This declaration was added to thread.c. It is a global list
+	 meant to keep track of all threads that have put themselves to sleep. 
+
+CHANGED STRUCT: (note: only the added field is shown in the struct
+
+
+	"struct thread
+	{
+	        ...everything else is kept. the addition is noted below:
+
+		/* The number of ticks left for the thread to sleep, when it
+		puts itself to sleep with a timer_sleep call. reset
+		at every timer_sleep call. */
+		int64_t sleep_ticks;
+	};"
+
+PURPOSE:
 
 
 ---- ALGORITHMS ----
@@ -36,21 +55,84 @@ Michael Malek <mjmalek218@protonmail.com>
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+First interrupts are disabled. Then the current thread's struct
+is pushed onto a global list of sleeping threads, and a field I added to each thread 
+struct, called sleep_ticks (described above), is set to the number of ticks remaining
+(on first iteration, this is just the argument "ticks" to the function, unless
+a timer interrupt occurs between the intialization of "start" and the disabling
+of interrupts).  Finally the thread is blocked. When the thread is eventually
+unblocked by the timer_handler, it is put on the ready queue. When it runs it puts
+interrupts at the level they were prior to calling timer_sleep, and continues execution.
+
+The reason this occurs in a while loop is because I'm afraid that, if the scheduler
+were for to some reason wake the thread that put itself to sleep up, it could 
+potentially sleep for less time than it is supposed to. The way things are, the 
+thread is guaranteed to be disabled for at least the number of ticks it wanted to
+be. 
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+What are the additional steps that *must* occur in the timer interrupt
+handler?
+
+	-- All sleep ticks for all sleeping threads *must* be decremented
+	   and then checked for zero
+
+	-- If one reaches 0, remove the sleeping thread from the list of 
+	   threads that have put themselves to sleep, and *unblock* the thread
+	   (i.e. don't run it just put it on the ready queue)
+
+Thus, the best way we could minimize time spent in the timer interrupt handler
+is *only* adding the above steps to the handler, and performing them efficiently,
+which is what we did.  
+
+One way I could have potentially made this faster was by
+maintaining simply some sort of array of the ticks, and rather than iterating over
+points in a list object we could simply just iterate through the array
+decrementing each amount of ticks, but I didn't think the added complexity
+of allocating separate memory for the array and re-sizing this memory every now
+and then would be worth the amoritzed performance benefits. 
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+At my first shot at implementation of timer_sleep(), I attempted to use
+synchronization primitives (lock + condition variable to signal to a sleeping thread
+to wake up). I realized, however, that synchronization of access to the timer_sleep_list
+needs to occur not only amongst threads putting themselves to sleep, but also the timer    
+interrupt handler, which cannot be controlled by locks. 
+
+Thus, to answer the question, I just disabled interrupts in timer_sleep.
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+Again, the only way that I could think to do this was by disabling interrupts, since
+the interrupt handler cannot sleep/employ synchronization primitives. 
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+The design above was the simplest, bare-bone design I could think of. As discussed
+in several of the answers above, there were two alterations I considered:
+
+   1. Using locks to control access to the timer_sleep list, and 
+
+   2. Using an array of timer ticks remaining for each thread, and a linked list
+   of struct threads, as opposed to putting the ticks remaining as a field in the 
+   struct threads, so we could operatore primarily out of an array and use a linked
+   list only when necessary (the former being faster)
+
+In the case of (1.), the idea simply was not feasible as explained in A.4. In the case
+of (2.), the increased complexity of attempting to implement such a solution for  
+a marginal amortized performance benefit was simply not worth it (also explained in A.3),
+as it would have required allocating+dynamically resizing the array of ticks. 
+
 
 			 PRIORITY SCHEDULING
 			 ===================
@@ -138,26 +220,3 @@ ticks   A   B   C   A   B   C   to run
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
 
-			   SURVEY QUESTIONS
-			   ================
-
-Answering these questions is optional, but it will help us improve the
-course in future quarters.  Feel free to tell us anything you
-want--these questions are just to spur your thoughts.  You may also
-choose to respond anonymously in the course evaluations at the end of
-the quarter.
-
->> In your opinion, was this assignment, or any one of the three problems
->> in it, too easy or too hard?  Did it take too long or too little time?
-
->> Did you find that working on a particular part of the assignment gave
->> you greater insight into some aspect of OS design?
-
->> Is there some particular fact or hint we should give students in
->> future quarters to help them solve the problems?  Conversely, did you
->> find any of our guidance to be misleading?
-
->> Do you have any suggestions for the TAs to more effectively assist
->> students, either for future quarters or the remaining projects?
-
->> Any other comments?
