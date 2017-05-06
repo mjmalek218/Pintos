@@ -29,10 +29,20 @@ Michael Malek <mjmalek218@protonmail.com>
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
 
-NEW STRUCT: "static struct list timer_sleep_list;"
+NEW VARIABLE DECLARATION: "struct list timer_sleep_list;"
 
-PURPOSE: This declaration was added to thread.c. It is a global list
+PURPOSE: This declaration was added to thread.h. It is a global list
 	 meant to keep track of all threads that have put themselves to sleep. 
+
+NEW VARIABLE DECLARATION: "struct thread* sleeping_thread"
+
+PURPOSE: Added to thread.c. Simply a handle to the current sleeping thread in
+the iteration over timer_sleep_list.
+
+NEW VARIABLE DECLARATION: "struct list_elem* e"
+
+PURPOSE: Added to thread.c, just used to iterate over timer_sleep_list when 
+updating sleep_ticks of each sleeping thread. 
 
 CHANGED STRUCT: (note: only the added field is shown in the struct
 

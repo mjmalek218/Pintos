@@ -114,14 +114,23 @@ timer_sleep (int64_t ticks)
   /* we use a while loop here to re-check in case the scheduler wakes
      up this thread pre-maturely. */
   while (timer_elapsed (start) < ticks)
-    { 
+    {       
       intr_disable();
 
       list_push_back(&timer_sleep_list, &thread_current()->elem);
       
-      /* reset the amount it needs to sleep by */      
+      /* reset the amount it needs to sleep by. since we entered the while
+         loop with interrupts disabled...this should *always* be positive.  */      
       thread_current()->sleep_ticks = ticks - timer_elapsed (start);
+
+
+      // REMOVE REMOVE
+      //      printf("%lld \n", ticks - timer_elapsed (start));
     
+      //      printf ("%s %lld \n", thread_current()->name, thread_current()->sleep_ticks);
+      // REMOVE REMOVE
+
+
       /* We don't want to run the thread once time has elapsed...
          we just want to put it on the ready queue. Therefore,
          synchronization primitives are unhelpful. Just put the current
@@ -130,11 +139,15 @@ timer_sleep (int64_t ticks)
       thread_block();
     }
 
+  /* New addition. If the thread has not put itself to sleep put sleep_ticks = -1. */
+
   /* I think the coordination here makes sense tbh. If interrupts are disabled
      in this function, then they should be re-enabled in this function.
      However, for obvious reasons the thread must be unblocked in the interrupt timer
      handler. 
  */
+
+
   intr_set_level (old_level);
 
   /******** END CHANGES *********/

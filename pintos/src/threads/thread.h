@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -103,8 +104,11 @@ struct thread
 
     /* BEGIN FIELDS I HAVE ADDED */
     
-    /* general purpose synchronization tool*/
-    static struct condition cond; 
+    /* general purpose synchronization tool
+
+       COMMENTING THIS OUT. I HAVE NO IDEA WHY I PUT THIS HERE
+*/  
+    //struct condition cond; 
     
     /* The number of ticks left for the thread to sleep, when it
        puts itself to sleep with a timer_sleep call. reset
@@ -113,6 +117,14 @@ struct thread
 
     /* END FIELDS I HAVE ADDED */
   };
+
+
+// CHANGED CHANGED
+/* need to declare this here because it must be modified by devices/timer.c,
+   which only includes the thread.h header file not thread.c */
+struct list timer_sleep_list;
+// CHANGED CHANGED
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

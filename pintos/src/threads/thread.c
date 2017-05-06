@@ -28,12 +28,6 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-// CHANGED CHANGED
-/* SOMETHING THAT I HAVE CHANGED*/
-static struct list timer_sleep_list;
-// CHANGED CHANGED
-
-
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -154,10 +148,9 @@ thread_tick (void)
 
   /***************** BEGIN CHANGES */
 
-  
+    
   /* update the timer sleep list. if a thread reaches zero put it on
      the ready list. */
-
   struct thread* sleeping_thread;  
   struct list_elem* e;
 
@@ -168,11 +161,17 @@ thread_tick (void)
   for (e = list_begin(&timer_sleep_list); e!= list_end(&timer_sleep_list); e = list_next(e))
     {
       /* decrement each sleep_tick. remember list_entry returns a pointer */
-      sleeping_thread = list_entry(e, thread, elem);
+      sleeping_thread = list_entry(e, struct thread, elem);
+
+      /* REMOVE REMOVE REMOVE JUST FOR DEBUGGING */
+
+      /* ************************************************/
 
       /* a few sanity checks. for the sake of speed these should be later removed probably.*/
       ASSERT (sleeping_thread != NULL);
-      ASSERT (sleeping_threads->sleep_ticks > 0);
+      ASSERT (sleeping_thread->sleep_ticks > 0);
+
+      printf ("%s %lld \n", thread_current()->name, thread_current()->sleep_ticks);
 
       sleeping_thread->sleep_ticks--;
 
@@ -190,8 +189,16 @@ thread_tick (void)
 void  
 thread_print_stats (void) 
 {
-  printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
-          idle_ticks, kernel_ticks, user_ticks);
+  printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks, "
+           "%lld sleep ticks left \n", idle_ticks, kernel_ticks, user_ticks, 
+	  thread_current()->sleep_ticks);
+  /* EXAMINE THIS. LOOK AT THE QUESTION I WROTE DOWN PREVIOUSLY. 
+
+     WHY DID YOU THINK IT WAS BEST TO PUT "sleep_ticks" IN A THREAD STRUCT ITSELF,
+     AS OPPOSED TO A GLOBAL VARIABLE IN THREAD.C like PFAFF DID FOR ALL OTHER THREAD
+     STATS?
+*/
+
 }
 
 /* Creates a new kernel thread named NAME with the given initial
