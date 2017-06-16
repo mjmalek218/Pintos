@@ -102,7 +102,7 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    /* BEGIN FIELDS I HAVE ADDED */
+    /* BEGIN FIELDS I HAVE ADDED FOR THE MASTER BRANCH */
     
     /* general purpose synchronization tool
 
@@ -115,7 +115,14 @@ struct thread
        at every timer_sleep call. */
     int64_t sleep_ticks;
 
-    /* END FIELDS I HAVE ADDED */
+    /* END FIELDS I HAVE ADDED FOR THE MASTER BRANCH */
+
+
+    /* BEGIN FIELDS I HAVE ADDED FOR THE PRIORITY SCHEDULING BRANCH */
+    
+    
+
+    /* END FIELDS I HAVE ADDED FOR THE PRIORITY SCHEDULING BRANCH */
   };
 
 
@@ -161,5 +168,12 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+
+/********* MY FUNCTIONS ADDED *********/
+
+struct thread* highest_ready(struct list*);
+
+/********* END MY FUNCTIONS ADDED *********/
 
 #endif /* threads/thread.h */

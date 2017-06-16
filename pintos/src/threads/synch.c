@@ -113,13 +113,32 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+
+  /******************* BEGIN 2.2.3 CHANGES **************/
+  
+  if (!list_empty (&sema->waiters))
+    {
+      /* This is where the change should be made... rather than 
+         just wake up the first thread at the front of the list, wake
+         up the one with the highest priority. Since lock and cond rely
+         on semaphores for their base functionality, we kill 3 birds with
+         one stone here. */
+      struct thread* thread_to_choose = highest_ready(&sema->waiters);
+
+      /* Remove from the waiters list and unblock it to access the resource. */
+      list_remove(thread_to_choose->elem);
+      thread_unblock(thread_to_choose);
+      
+    }
+
+  /******************* END 2.2.3 CHANGES ******************/
+  
   sema->value++;
   intr_set_level (old_level);
 }
 
+
+  
 static void sema_test_helper (void *sema_);
 
 /* Self-test for semaphores that makes control "ping-pong"

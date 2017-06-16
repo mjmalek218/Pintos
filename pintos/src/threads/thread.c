@@ -146,7 +146,7 @@ thread_tick (void)
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
-  /***************** BEGIN CHANGES */
+  /***************** BEGIN 2.2.2 CHANGES **********************/
 
     
   /* update the timer sleep list. if a thread reaches zero put it on
@@ -173,6 +173,11 @@ thread_tick (void)
 
       printf ("%s %lld \n", thread_current()->name, thread_current()->sleep_ticks);
 
+      /* ************************************************/
+      
+      /* END DEBUGGING PRINTS/SANITY CHECKS */
+
+      
       sleeping_thread->sleep_ticks--;
 
       if (sleeping_thread->sleep_ticks == 0)
@@ -182,7 +187,7 @@ thread_tick (void)
 	}
     }
 
-  /******************* END CHANGES */
+  /******************* END 2.2.2 CHANGES */
 }
 
 /* Prints thread statistics. */
@@ -301,6 +306,25 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+
+  /************** BEGIN 2.2.3 CHANGES *************/
+
+  /* Since we are in a priority scheduler, the current thread
+     running is always the one of highest priority. */
+  if (t->priority > thread_current()->priority)
+    {
+      /* 
+	 As of right now, there is no function to 
+         directly yield to another thread...perhaps I could 
+         implement that later but for now just yield. schedule()
+	 will iterate through all ready threads and find *t. 
+      */
+ 
+      thread_yield();
+    }
+
+  /************* END 2.2.3 CHANGES ****************/
+
   intr_set_level (old_level);
 }
 
@@ -398,6 +422,23 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+
+  /* -------- BEGIN 2.2.3 CHANGES -------- */
+  
+  struct thread* curr;
+
+  for (e = list_begin(&ready_list); e != list_end(&ready_list);
+       e = list_next(e))
+    {
+      struct thread* curr = list_entry(e, struct thread, elem);
+      if (curr->priority > running_highest)
+	 {
+	   /* if we find even one ready thread with greater priority, must yield */
+	   thread_yield();
+	 }
+    }
+
+  /* -------- END 2.2.3 CHANGES ------- */
 }
 
 /* Returns the current thread's priority. */
@@ -549,8 +590,25 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
+
+  /***************** BEGIN 2.2.3 CHANGES *********************/
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    {
+      /* Need to iterate through all available threads, and choose the 
+         highest priority thread to run. Priorities range from 
+	 PRI_MIN to PRIMAX as set in thread.h */
+      struct thread* thread_to_run = highest_ready(&ready_list);
+      
+      /* In the original code, the thread is also removed from the ready list
+         here so we must do that as well. */
+      list_remove(thread_to_run->elem);
+
+      return thread_to_run;
+    }
+
+  /***************** END 2.2.3 CHANGES **********************/
+
+  
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -639,3 +697,43 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+
+/************* BEGIN MY FUNCTIONS ADDED SECTION *****************/
+
+
+
+/* 
+   FUNCTION USEFUL FOR 2.2.3:
+
+   given a list of threads, 
+   scours the ready list for the highest priority thread, and returns it. 
+
+   WARNING: An empty list should not be passed in. 
+
+*/
+struct thread* highest_ready(struct list* thread_list)
+{
+
+  ASSERT(!list_empty(thread_list));
+
+  int running_highest = PRI_MIN - 1;
+  struct thread* curr;
+  struct thread* highest_thread;
+      
+  for (e = list_begin(thread_list); e != list_end(thread_list);
+       e = list_next(e))
+    {
+      curr = list_entry(e, struct thread, elem);
+	   
+      if (curr->priority > running_highest)
+	{
+	  running_highest = curr->priority;
+	  highest_thread = curr;
+	}
+    }
+  
+  return highest_thread;
+  
+}
