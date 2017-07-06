@@ -97,10 +97,7 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 #endif
-
-    /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
-
+    
     /* BEGIN FIELDS I HAVE ADDED */
     
     /* general purpose synchronization tool*/
@@ -112,6 +109,16 @@ struct thread
     int64_t sleep_ticks;
 
     /* END FIELDS I HAVE ADDED */
+
+
+    /* REMEMBER: "magic" always needs to be the *last* item in thread struct, 
+       so we can detect corruption before it occurs. All extra fields should 
+       come before this. */
+    
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+
+    
   };
 
 /* If false (default), use round-robin scheduler.
