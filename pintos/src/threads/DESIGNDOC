@@ -153,13 +153,13 @@ as it would have required allocating+dynamically resizing the array of ticks.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-nothing changed so far (might be different for priority donation)
+
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
 
-again nothing changed so far, but this will have to change 
+
 
 ---- ALGORITHMS ----
 
@@ -167,16 +167,90 @@ again nothing changed so far, but this will have to change
 >> a lock, semaphore, or condition variable wakes up first?
 
 In the Pintos base code, locks are built upon semaphores, so altering the code
-so that in a semaphore locks are woken up first nturally changes how locks
+so that in a semaphore locks are woken up first naturally changes how locks
 function as well.
 
-As for condition variables, 
+As for condition variables, the original code was written as follows:
+
+   1. Have a condition variable consist only of a list (representing the threads waiting) 
+
+   2. Whenever a thread waits on a condition, create a corresponding *semaphore_elem*,
+      which is really just a semaphore and a list element wrapped into one struct,
+      so that it may be placed on the condition waiters list. 
+      Thus, each single thread waiting on the condition has its own semaphore_elem->elem
+      holding its place in the list. 
+
+   3. The semaphore component of the semaphore_elem is initialized to 0. Again list_elem
+      is not used (unless a timer interrupt occurs and the thread gets de-scheduled, in
+      which case the thread's list_elem is placed on the ready list, but this really isn't
+      a problem since we only intend to use the native synch elem once the thread blocks
+      later)
+
+   4. Once it is initialized to 0, the semaphore_elem's list_elem is placed on the cond_wait
+      list. Again no use of the native list_elem
+
+   5. Immediately after the lock is released, and the semaphore is downed. *This* is where
+      the list_elem is used, and in fact, the fact that it is used here assures me that
+      replacing this method with simply pushing the thread's original list_elem will not
+      interfere with other conflicting use of the native list_elem that I am not currently
+      aware of.
+
+   6. The ordering of the steps above is important: list push back, lock release, sema_down.
+      If the lock were released before the sema were downed, then theres a chance the thread
+      sleeps forever when it reaches sema_down. If the semaphore were downed before lock_release,
+      the thread would sleep while holding the lock, and so it would sleep forever and block
+      any use of the condition variable.
+
+
+There are two issues I personally have with this implementation. Firstly,
+there is no easy way to access waiting threads' priorities. Secondly, it is needlessly
+complex: can just place the struct list_elem* elem already provided there. 
+
 
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+void lock_acquire(struct lock* lock), as of right now, goes through the following steps:
+
+     0. if the lock isn't held, just acquire it and *update* the lock's struct to indicate
+     	that the current thread is holding it (new struct don't forget this)
+
+     1. If the lock is held by another thread, update the thread's struct to indicate
+     	it is waiting on that lock
+
+     2. Call percolate_priority(int merged_priority, struct lock* lock), which does
+     	the following:
+
+     	a. checks to see if the thread holding the lock has higher merged_priority
+	   than the inputted
+
+	b. if yes, finishes
+
+	c. if no, updates the "merged_priority" and "donated_priority" fields
+
+	d. checks to see if the thread holding the lock is waiting on another thread
+
+	e. if yes, calls itself recursively on the new lock *with the old priority*
+
+	f. if no, returns.
+
+
+	NOTE: percolate_priority *must* be called with interrupts disabled
+
+     3. once percolate_priority returns, the thread blocks. 
+
+
+
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+
+     1. the locks's "holder" field is updated accordingly
+
+     2. the thread releasing the lock calls a helper function,
+     	"update_priority" which does the following:
+
+	a. 
 
 ---- SYNCHRONIZATION ----
 
