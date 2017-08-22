@@ -25,6 +25,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -88,7 +89,7 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -102,26 +103,27 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    /* BEGIN FIELDS I HAVE ADDED FOR THE MASTER BRANCH */
-    
-    /* general purpose synchronization tool
-
-       COMMENTING THIS OUT. I HAVE NO IDEA WHY I PUT THIS HERE
-*/  
-    //struct condition cond; 
-    
+    /* BEGIN FIELDS I HAVE ADDED FOR TIMER */
+        
     /* The number of ticks left for the thread to sleep, when it
        puts itself to sleep with a timer_sleep call. reset
        at every timer_sleep call. */
     int64_t sleep_ticks;
 
-    /* END FIELDS I HAVE ADDED FOR THE MASTER BRANCH */
-
+    /* END FIELDS I HAVE ADDED FOR TIMER */
 
     /* BEGIN FIELDS I HAVE ADDED FOR THE PRIORITY SCHEDULING BRANCH */
-    
+
+    /* This list will constitute *all* locks held by the thread currently */
+    struct list locks_held;
+
+    /* Lock the thread is waiting on. NULL if blocked on no lock. */
+    struct lock* waiting_on;
     
 
+    int merged_priority;     /* max of all donated priorities and the thread's native priority. */
+    int native_priority;     /* reg Priority with new name */
+    
     /* END FIELDS I HAVE ADDED FOR THE PRIORITY SCHEDULING BRANCH */
   };
 
@@ -173,6 +175,7 @@ int thread_get_load_avg (void);
 /********* MY FUNCTIONS ADDED *********/
 
 struct thread* highest_ready(struct list*);
+
 
 /********* END MY FUNCTIONS ADDED *********/
 

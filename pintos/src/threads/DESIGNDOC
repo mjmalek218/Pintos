@@ -153,11 +153,101 @@ as it would have required allocating+dynamically resizing the array of ticks.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+*************** BEGIN FIRST CHANGE: struct thread ************************
+
+struct thread
+  {
+    /* Owned by thread.c. */
+    tid_t tid;                          /* Thread identifier. */
+    enum thread_status status;          /* Thread state. */
+    char name[16];                      /* Name (for debugging purposes). */
+    uint8_t *stack;                     /* Saved stack pointer. */
+
+    struct list_elem allelem;           /* List element for all threads list. */
+
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+
+    /* BEGIN FIELDS I HAVE ADDED FOR THE MASTER BRANCH */
+    
+    /* general purpose synchronization tool
+
+       COMMENTING THIS OUT. I HAVE NO IDEA WHY I PUT THIS HERE
+*/  
+    //struct condition cond; 
+    
+    /* The number of ticks left for the thread to sleep, when it
+       puts itself to sleep with a timer_sleep call. reset
+       at every timer_sleep call. */
+    int64_t sleep_ticks;
+
+    /* END FIELDS I HAVE ADDED FOR THE MASTER BRANCH */
+
+
+    /* BEGIN FIELDS I HAVE ADDED FOR THE PRIORITY SCHEDULING BRANCH */
+
+    /* This list will constitute *all* locks held by the thread currently */
+    struct list locks_held;
+
+    /* Lock the thread is waiting on. NULL if blocked on no lock. */
+    struct lock* waiting_on;
+    
+    /* The maximum of all donated priorities and the thread's native priority. */
+    int merged_priority;
+    int native_priority;                /* reg Priority with new name */
+    
+    /* END FIELDS I HAVE ADDED FOR THE PRIORITY SCHEDULING BRANCH */
+  };
+
+*************** struct thread DISCUSSION ************************
+
+Added:
+
+     -- "sleep_ticks" field: when a thread puts itself to sleep, this field
+       is updated at every timer tick until it reaches 0, and the thread
+       is unblocked
+     -- "locks_held" field: list of locks a thread is holding. helps in two
+        ways:
+
+        1. When "thread_set_priority()" is called, allows the "merged_priority"
+	   field to be accurately updated. 
+
+        2. When "lock_release()" is called, allows the "merged_priority"
+	   field to be accurately updated. 
+
+     -- "waiting_on" field: the lock a thread may be waiting on. Necessary
+     	for chaining and allowing a high priority thread to donate through
+	a list of threads waiting on different locks (mainly used in the
+	"percolate_priority(...)" function)
+
+     -- "merged_priority" field: the max of all donated priorities, and the
+     	native priority. If the thread is holding no locks, merged = native
+
+Changed:
+
+     --"priority" to "donated_priority": reduces ambiguity with the new
+        "merged_priority" field
+
+
+*************** END FIRST CHANGE: struct thread ************************
+
+*************** BEGIN SECOND CHANGE: struct lock ************************
 
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
+
+
+
 
 
 
@@ -240,7 +330,6 @@ void lock_acquire(struct lock* lock), as of right now, goes through the followin
      3. once percolate_priority returns, the thread blocks. 
 
 
-
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
 
@@ -257,6 +346,17 @@ void lock_acquire(struct lock* lock), as of right now, goes through the followin
 >> B6: Describe a potential race in thread_set_priority() and explain
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
+
+Example race:
+
+   1. thread_set_priority() is called to set a high priority
+
+   2. native_priority is set correctly but then a timer interrupt occurs,
+      so merged is still old value
+
+   3. // TODO TODO TODO, need to think about this more. 
+
+   4. 
 
 ---- RATIONALE ----
 

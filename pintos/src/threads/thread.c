@@ -40,8 +40,12 @@ static struct lock tid_lock;
 /* SOMETHING ELSE I HAVE CHANGED */
 /* A general purpose lock for use in scheduling, in conjunction with each thread's
    condition variable. */
-static struct lock schedule_lock; 
-// CHANGED CHANGED
+static struct lock priority_lock;
+
+// need to look into this frankly...seems as thouh 
+
+/* End changes */
+
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -60,6 +64,24 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+/* My COMMENT:
+
+   Think that comment is incomplete: "thread_ticks" is the number of ticks
+   since the last time a thread called *any* of the following:
+
+      >> thread_yield() //need to figure out where exactly this is called form rn
+      >> thread_block() // de-schedule since waiting on something 
+      >> thread_exit() // suicide
+
+   since from all of these, schedule() is called, and from schedule()
+   thread_schedule_tail() is called *even if* the new thread to be scheduled
+   is exactly the same...and in thread_schedule_tail() thread_ticks() is always reset.
+   In fact, the only difference in execution that occurs,
+   if the current thread is the one to be scheduled, is that the assembly routine
+   "switch" is not called. 
+*/
+
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -70,12 +92,14 @@ static void kernel_thread (thread_func *, void *aux);
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
-static void init_thread (struct thread *, const char *name, int priority);
+static void init_thread (struct thread *, const char *name, int native_priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
+
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -96,7 +120,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
-  lock_init (&schedule_lock);
+  lock_init (&priority_lock);
   list_init (&ready_list);
   list_init (&all_list);
   list_init (&timer_sleep_list);
@@ -222,7 +246,7 @@ thread_print_stats (void)
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
 tid_t
-thread_create (const char *name, int priority,
+thread_create (const char *name, int native_priority,
                thread_func *function, void *aux) 
 {
   struct thread *t;
@@ -240,7 +264,7 @@ thread_create (const char *name, int priority,
     return TID_ERROR;
 
   /* Initialize thread. */
-  init_thread (t, name, priority);
+  init_thread (t, name, native_priority);
   tid = t->tid = allocate_tid ();
 
   /* Prepare thread for first run by initializing its stack.
@@ -311,13 +335,13 @@ thread_unblock (struct thread *t)
 
   /* Since we are in a priority scheduler, the current thread
      running is always the one of highest priority. */
-  if (t->priority > thread_current()->priority)
+  if (t->merged_priority > thread_current()->merged_priority)
     {
       /* 
 	 As of right now, there is no function to 
          directly yield to another thread...perhaps I could 
          implement that later but for now just yield. schedule()
-	 will iterate through all ready threads and find *t. 
+	 will iterate through all ready threads and find it. 
       */
  
       thread_yield();
@@ -383,7 +407,16 @@ thread_exit (void)
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and
-   may be scheduled again immediately at the scheduler's whim. */
+   may be scheduled again immediately at the scheduler's whim.
+
+   ************** MY COMMENTS: DID I NOT CHECK FOR PRIORITY HERE??? FIX THIS 
+
+   EDIT: NVM, schedule is still called here. But need to examine the efficiency 
+
+   CAN DO THAT LATER. FIRST NEED TO ENSURE FUNCTIONALITY. 
+
+   END MY COMMENTS ********************************
+ */
 void
 thread_yield (void) 
 {
@@ -417,42 +450,67 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* Sets the current thread's priority to NEW_PRIORITY. 
+   Because this function blocks interrupts, 
+*/
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-
-  /* -------- BEGIN 2.2.3 CHANGES -------- */
-  
+  /* This entire function was changed  */
   struct thread* curr;
 
+  /* to avoid race, NEED to disable interrupts here. */
+  
+  thread_current ()->native_priority = new_priority;
+
+  /* no donated priority: merged and native are the same*/
+  if (thread_current()->locks_held == NULL)
+    {
+      thread_current()->merged_priority = new_priority;
+    }
+
+  /* In this case, other threads could be donating their priorities, 
+     and so should only update if the new native priority is greater
+     than previous */
+  else
+    {
+      if (thread_current()->merged_priority < new_priority)
+	{
+	  thread_current()->merged_priority = new_priority;
+	}
+    }
+
+  // OK...so the above has ensured that merged and native are appropriately
+  // calibrated at this choke point
+  
   for (e = list_begin(&ready_list); e != list_end(&ready_list);
        e = list_next(e))
     {
       struct thread* curr = list_entry(e, struct thread, elem);
-      if (curr->priority > running_highest)
+      if (curr->merged_priority > new_priority)
 	 {
 	   /* if we find even one ready thread with greater priority, must yield */
 	   thread_yield();
 	 }
     }
 
+  intr_set
+  
   /* -------- END 2.2.3 CHANGES ------- */
 }
 
-/* Returns the current thread's priority. */
-int
-thread_get_priority (void) 
+/* Returns the current thread's *merged* priority, which is the relevant one
+   frankly. */
+int thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current ()->merged_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  /* Not yet implemented. Only necessary for the advanced scheduler. */
 }
 
 /* Returns the current thread's nice value. */
@@ -552,7 +610,7 @@ is_thread (struct thread *t)
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
-init_thread (struct thread *t, const char *name, int priority)
+init_thread (struct thread *t, const char *name, int native_priority)
 {
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
@@ -562,7 +620,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
+  t->native_priority = native_priority;
+  t->merged_priority = merged_priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
@@ -707,10 +766,12 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 /* 
    FUNCTION USEFUL FOR 2.2.3:
 
-   given a list of threads, 
-   scours the ready list for the highest priority thread, and returns it. 
+   given a POINTER to a list of threads, 
+   scours the list for the highest priority thread, and returns it. 
 
-   WARNING: An empty list should not be passed in. 
+   WARNING: An empty list should not be passed in, NOR any list which 
+   does not consist of list_elem's packaged inside a thread struct. 
+   Anything else leads to undefined behavior. 
 
 */
 struct thread* highest_ready(struct list* thread_list)
@@ -721,15 +782,17 @@ struct thread* highest_ready(struct list* thread_list)
   int running_highest = PRI_MIN - 1;
   struct thread* curr;
   struct thread* highest_thread;
-      
+  struct list_elem* e; 
+
+  
   for (e = list_begin(thread_list); e != list_end(thread_list);
        e = list_next(e))
     {
       curr = list_entry(e, struct thread, elem);
 	   
-      if (curr->priority > running_highest)
+      if (curr->merged_priority > running_highest)
 	{
-	  running_highest = curr->priority;
+	  running_highest = curr->merged_priority;
 	  highest_thread = curr;
 	}
     }
@@ -737,3 +800,5 @@ struct thread* highest_ready(struct list* thread_list)
   return highest_thread;
   
 }
+
+

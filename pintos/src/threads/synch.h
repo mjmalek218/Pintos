@@ -20,9 +20,34 @@ void sema_self_test (void);
 /* Lock. */
 struct lock 
   {
-    struct thread *holder;      /* Thread holding lock (for debugging). */
-    struct semaphore semaphore; /* Binary semaphore controlling access. */
+    /* Thread holding lock. Originally for debugging, but with priority donation...
+       necessary for updating donated_priority field once a lock is released. */
+    struct thread* holder;      
+
+    /* 
+       for the list of locks held by every thread: because any lock could potentially
+       be a part of this list, defining a new struct ist worth it imo. 
+       We can conserve some space here, by designing the function such that the holder
+       field is NULL iff the lock is not held by any thread. Thus the value field is
+       removed. 
+    */
+    struct list_elem* lock_list_elem;
+    
+    
+    /**********  BEGIN priority donation changes ******/
+
+    /* Before a semaphore was included here. While it may seem superfluous 
+       to have deleted the semaphore and then just included the same fields
+       it had previously, due to the differences that priority donation will
+       necessitate later on, none of the semaphore methods could be recycled
+       and thus just simply wasn't clean to keep. 
+    */
+    struct list waiters; 
+
+    /******** END priority donation changes **********/
+    
   };
+
 
 void lock_init (struct lock *);
 void lock_acquire (struct lock *);
